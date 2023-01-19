@@ -167,35 +167,37 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 	return p, nil
 }
 
-func (p *Processbuilder) output() (*bytes.Buffer, int, error) {
+func (p *Processbuilder) output() (*bytes.Buffer, *bytes.Buffer, int, error) {
 	var total = p.Count()
 	var outBuffer bytes.Buffer
+	var errBuffer bytes.Buffer
 
 	if total > 0 {
 		if p.cmds[total-1].StdOut != nil {
-			return nil, -1, errors.New("stdout not allowed on the last command")
+			return nil, nil, -1, errors.New("stdout not allowed on the last command")
 		}
 		p.cmds[total-1].StdOut = &outBuffer
+		p.cmds[total-1].StdErr = &errBuffer
 	}
 
 	_, err := p.prepare()
 
 	if err != nil {
-		return nil, 0, err
+		return nil, &errBuffer, 0, err
 	}
 
 	defer p.cancelFn()
 	defer p.close()
 
 	if err := Start(p); err != nil {
-		return nil, 0, err
+		return nil, &errBuffer, 0, err
 	}
 
 	if _, _, err := Wait(p); err != nil {
-		return nil, -1, err
+		return nil, &errBuffer, -1, err
 	}
 
-	return &outBuffer, p.cmds[total-1].exitCode, nil
+	return &outBuffer, &errBuffer, p.cmds[total-1].exitCode, nil
 }
 
 func Pipe(option Option, cmd ...*command) (*Processbuilder, error) {
@@ -209,7 +211,7 @@ func Create(option Option, cmd ...*command) (*Processbuilder, error) {
 	return p.prepare()
 }
 
-func Output(option Option, cmds ...*command) (*bytes.Buffer, int, error) {
+func Output(option Option, cmds ...*command) (*bytes.Buffer, *bytes.Buffer, int, error) {
 	p := &Processbuilder{cmds: cmds, option: &option}
 	return p.output()
 }
