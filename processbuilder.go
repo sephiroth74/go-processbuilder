@@ -5,10 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog"
 	"io"
-	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,12 +17,16 @@ import (
 )
 
 var (
-	Logger = log.New(os.Stdout, "PROC", 0)
+	Logger *zerolog.Logger = nil
 
 	ErrNoCommands         = errors.New("at least one command is required")
 	ErrProcAlreadyStarted = errors.New("process already started")
 	ErrProcNotStarted     = errors.New("process not started")
 )
+
+func SetLogger(logger *zerolog.Logger) {
+	Logger = logger
+}
 
 type command struct {
 	command string
@@ -84,7 +89,10 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 	cmds := streams.Map(p.cmds, func(data *command) string {
 		return data.String()
 	})
-	Logger.Println(strings.Join(cmds, " | "))
+
+	if Logger != nil {
+		Logger.Debug().Msgf("Executing `%s`\n", strings.Join(cmds, " | "))
+	}
 
 	var cancel context.CancelFunc
 	var ctx context.Context
@@ -102,7 +110,9 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 
 	// prepare commands
 	for index, command := range p.cmds {
-		Logger.Printf("%d/%d preparing %s\n", index, total, command.String())
+		if Logger != nil {
+			Logger.Trace().Msgf("%d/%d preparing %s\n", index, total, command.String())
+		}
 
 		command.cmd = exec.CommandContext(ctx, command.command, command.args...)
 
@@ -144,7 +154,9 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 		// last command
 		if index == total-1 {
 			if p.option.stdoutPipe {
-				Logger.Printf("using cmd.StdoutPipe on '%s'\n", command.String())
+				if Logger != nil {
+					Logger.Trace().Msgf("using cmd.StdoutPipe on '%s'\n", command.String())
+				}
 				pipe, err := command.cmd.StdoutPipe()
 				if err != nil {
 					return nil, err
@@ -158,7 +170,9 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 				p.StdErrPipe = pipeErr
 
 			} else if command.StdOut != nil {
-				Logger.Printf("using cmd.StdOut on '%s'\n", command.String())
+				if Logger != nil {
+					Logger.Trace().Msgf("using cmd.StdOut on '%s'\n", command.String())
+				}
 				command.cmd.Stdout = command.StdOut
 			}
 		}
@@ -225,7 +239,9 @@ func Start(p *Processbuilder) error {
 	total := len(p.cmds)
 
 	for index, command := range p.cmds {
-		Logger.Printf("%d/%d calling start on command %s\n", index, total, command.String())
+		if Logger != nil {
+			Logger.Trace().Msgf("%d/%d calling start on command %s\n", index, total, command.String())
+		}
 		if err := command.cmd.Start(); err != nil {
 			return err
 		}
@@ -245,7 +261,9 @@ func Wait(p *Processbuilder) (int, *exec.Cmd, error) {
 	if p.option.Close != nil {
 		go func() {
 			<-*p.option.Close
-			Logger.Println("Received kill signal!")
+			if Logger != nil {
+				Logger.Debug().Msg("Received kill signal!")
+			}
 			Kill(p)
 		}()
 	}
@@ -254,7 +272,9 @@ func Wait(p *Processbuilder) (int, *exec.Cmd, error) {
 	var lastCommand = p.cmds[total-1]
 
 	for index, command := range p.cmds {
-		Logger.Printf("%d/%d calling wait on command %s\n", index, total, command.String())
+		if Logger != nil {
+			Logger.Trace().Msgf("%d/%d calling wait on command %s\n", index, total, command.String())
+		}
 
 		if err := command.cmd.Wait(); err != nil {
 			return command.cmd.ProcessState.ExitCode(), nil, err
@@ -264,20 +284,20 @@ func Wait(p *Processbuilder) (int, *exec.Cmd, error) {
 		command.exitCode = exitCode
 
 		if command.pipeWriter != nil {
-			Logger.Printf("[%d] closing pipeWripter %v of command %s\n", index, command.pipeReader, command.command)
 			command.pipeWriter.Close()
 		}
 
 		if index > 0 {
 			previousCommand = p.cmds[index-1]
 			if previousCommand.pipeReader != nil {
-				Logger.Printf("[%d] closing pipeReader %v of command %s\n", index, previousCommand.pipeReader, command.command)
 				previousCommand.pipeReader.Close()
 			}
 		}
 	}
 
-	Logger.Printf("exitCode=%d\n", lastCommand.exitCode)
+	if Logger != nil {
+		Logger.Trace().Msgf("exitCode=%d\n", lastCommand.exitCode)
+	}
 	return lastCommand.exitCode, lastCommand.cmd, nil
 }
 
@@ -336,5 +356,5 @@ func (c *command) close() {
 }
 
 func (c *command) String() string {
-	return fmt.Sprintf("%s %s", c.command, strings.Join(c.args, " "))
+	return fmt.Sprintf("%s %s", filepath.Base(c.command), strings.Join(c.args, " "))
 }
