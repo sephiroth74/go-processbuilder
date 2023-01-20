@@ -29,7 +29,7 @@ func SetLogger(logger *zerolog.Logger) {
 	Logger = logger
 }
 
-type command struct {
+type Command struct {
 	command string
 	args    []string
 
@@ -55,7 +55,7 @@ func EmptyOption() Option {
 }
 
 type Processbuilder struct {
-	cmds   []*command
+	cmds   []*Command
 	option *Option
 
 	started    bool
@@ -64,6 +64,13 @@ type Processbuilder struct {
 	Ctx        context.Context
 	StdoutPipe io.ReadCloser
 	StdErrPipe io.ReadCloser
+}
+
+func (p *Processbuilder) String() string {
+	cmds := streams.Map(p.cmds, func(data *Command) string {
+		return data.String()
+	})
+	return fmt.Sprintf("ProcessBuilder(%s, started=%t, exited=%t)", strings.Join(cmds, " | "), p.started, p.exited)
 }
 
 func (p *Processbuilder) Count() int {
@@ -88,7 +95,7 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 		return nil, ErrNoCommands
 	}
 
-	cmds := streams.Map(p.cmds, func(data *command) string {
+	cmds := streams.Map(p.cmds, func(data *Command) string {
 		return data.String()
 	})
 
@@ -108,7 +115,7 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 	p.Ctx = ctx
 	p.cancelFn = cancel
 
-	var previousCommand *command
+	var previousCommand *Command
 
 	// prepare commands
 	for index, command := range p.cmds {
@@ -222,18 +229,18 @@ func (p *Processbuilder) output() (*bytes.Buffer, *bytes.Buffer, int, error) {
 	return &outBuffer, &errBuffer, p.cmds[total-1].exitCode, nil
 }
 
-func Pipe(option Option, cmd ...*command) (*Processbuilder, error) {
+func Pipe(option Option, cmd ...*Command) (*Processbuilder, error) {
 	option.stdoutPipe = true
 	p := &Processbuilder{cmds: cmd, option: &option}
 	return p.prepare()
 }
 
-func Create(option Option, cmd ...*command) (*Processbuilder, error) {
+func Create(option Option, cmd ...*Command) (*Processbuilder, error) {
 	p := &Processbuilder{cmds: cmd, option: &option}
 	return p.prepare()
 }
 
-func Output(option Option, cmds ...*command) (*bytes.Buffer, *bytes.Buffer, int, error) {
+func Output(option Option, cmds ...*Command) (*bytes.Buffer, *bytes.Buffer, int, error) {
 	p := &Processbuilder{cmds: cmds, option: &option}
 	return p.output()
 }
@@ -254,6 +261,17 @@ func Start(p *Processbuilder) error {
 			return err
 		}
 	}
+
+	if p.option.Close != nil {
+		go func() {
+			<-*p.option.Close
+			if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
+				Logger.Trace().Msg("Received kill signal during Start!")
+			}
+			Kill(p)
+		}()
+	}
+
 	return nil
 }
 
@@ -270,13 +288,13 @@ func Wait(p *Processbuilder) (int, *exec.Cmd, error) {
 		go func() {
 			<-*p.option.Close
 			if Logger != nil && p.option.LogLevel <= zerolog.DebugLevel {
-				Logger.Debug().Msg("Received kill signal!")
+				Logger.Debug().Msg("Received kill signal during Wait!")
 			}
 			Kill(p)
 		}()
 	}
 
-	var previousCommand *command
+	var previousCommand *Command
 	var lastCommand = p.cmds[total-1]
 
 	for index, command := range p.cmds {
@@ -310,12 +328,17 @@ func Wait(p *Processbuilder) (int, *exec.Cmd, error) {
 }
 
 func Kill(p *Processbuilder) error {
+	if Logger != nil && p.option.LogLevel <= zerolog.DebugLevel {
+		Logger.Debug().Msgf("Killing %s\n", p.String())
+	}
+
 	if !p.started || p.exited {
 		return ErrProcNotStarted
 	}
-	if len(p.cmds) > 0 {
+	if p.Count() > 0 {
 		err := p.cmds[0].cmd.Process.Kill()
 		p.exited = true
+		println("err", err)
 		return err
 	}
 
@@ -323,6 +346,10 @@ func Kill(p *Processbuilder) error {
 }
 
 func Cancel(p *Processbuilder) error {
+	if Logger != nil && p.option.LogLevel <= zerolog.DebugLevel {
+		Logger.Debug().Msgf("Cancelling %s\n", p.String())
+	}
+
 	if !p.started || p.exited {
 		return ErrProcNotStarted
 	}
@@ -331,30 +358,30 @@ func Cancel(p *Processbuilder) error {
 	return nil
 }
 
-// Command creates a new os command
-func Command(cmd string, args ...string) *command {
-	return &command{
+// NewCommand creates a new os command
+func NewCommand(cmd string, args ...string) *Command {
+	return &Command{
 		command: cmd,
 		args:    args,
 	}
 }
 
-func (c *command) WithStdErr(w io.Writer) *command {
+func (c *Command) WithStdErr(w io.Writer) *Command {
 	c.StdErr = w
 	return c
 }
 
-func (c *command) WithStdOut(w io.Writer) *command {
+func (c *Command) WithStdOut(w io.Writer) *Command {
 	c.StdOut = w
 	return c
 }
 
-func (c *command) WithStdIn(r io.Reader) *command {
+func (c *Command) WithStdIn(r io.Reader) *Command {
 	c.StdIn = r
 	return c
 }
 
-func (c *command) close() {
+func (c *Command) close() {
 	if c.pipeWriter != nil {
 		c.pipeWriter.Close()
 	}
@@ -363,6 +390,6 @@ func (c *command) close() {
 	}
 }
 
-func (c *command) String() string {
+func (c *Command) String() string {
 	return fmt.Sprintf("%s %s", filepath.Base(c.command), strings.Join(c.args, " "))
 }

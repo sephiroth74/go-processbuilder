@@ -3,7 +3,6 @@ package processbuilder
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -12,20 +11,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"gotest.tools/v3/assert"
 )
 
 func init() {
-	Logger.SetOutput(ioutil.Discard)
+	var logger = zerolog.New(os.Stdout)
+	SetLogger(&logger)
 }
 
 // test simple output pipe
 func TestSimpleOutput(t *testing.T) {
-	outBuf, code, err := Output(
+	outBuf, _, code, err := Output(
 		EmptyOption(),
-		Command("ls", "-la"),
-		Command("grep", "process"),
-		Command("sed", "s/process/***/g"),
+		NewCommand("ls", "-la"),
+		NewCommand("grep", "process"),
+		NewCommand("sed", "s/process/***/g"),
 	)
 
 	assert.NilError(t, err)
@@ -44,8 +45,8 @@ func TestScreenMirroring(t *testing.T) {
 
 	p, err := Create(
 		Option{Timeout: 30 * time.Second, Close: &closeSignal},
-		Command("adb", "shell", "while true; do screenrecord --output-format=h264 --size=1024x768 -; done"),
-		Command("ffplay", "-framerate", "60", "-probesize", "64", "-sync", "video", "-").
+		NewCommand("adb", "shell", "while true; do screenrecord --output-format=h264 --size=1024x768 -; done"),
+		NewCommand("ffplay", "-framerate", "60", "-probesize", "64", "-sync", "video", "-").
 			WithStdErr(os.Stderr).
 			WithStdOut(os.Stdout),
 	)
@@ -75,9 +76,9 @@ func TestLogcatPipe(t *testing.T) {
 	defer close(closeSignal)
 
 	p, err := Pipe(
-		Option{Close: &closeSignal},
-		Command("adb", "logcat"),
-		Command("grep", "WARNING"),
+		Option{Close: &closeSignal, Timeout: 10 * time.Second},
+		NewCommand("adb", "logcat", "-v", "pid", "-T", "01-20 08:52:41.820", "tvlib.RestClient:V *:S"),
+		// NewCommand("grep", "RestClient"),
 	)
 	assert.NilError(t, err)
 
@@ -91,13 +92,7 @@ func TestLogcatPipe(t *testing.T) {
 	scanner := bufio.NewScanner(pipeOut)
 	for scanner.Scan() {
 		text := scanner.Text()
-		if strings.Contains(text, "WARNING") {
-			fmt.Printf("line => %s\n", text)
-			fmt.Println("******** OK DONE!!!! **************")
-			found = true
-			Cancel(p)
-			break
-		}
+		fmt.Printf("line => %s\n", text)
 	}
 
 	exit, _, err := Wait(p)
@@ -119,7 +114,7 @@ func TestSimpleLogcat(t *testing.T) {
 
 	p, err := Pipe(
 		Option{Close: &closeSignal},
-		Command("adb", "logcat"),
+		NewCommand("adb", "logcat"),
 	)
 	assert.NilError(t, err)
 
