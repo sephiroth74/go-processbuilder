@@ -5,13 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog"
 
 	streams "github.com/sephiroth74/go_streams"
 )
@@ -45,6 +46,7 @@ type command struct {
 type Option struct {
 	Timeout    time.Duration
 	Close      *chan os.Signal
+	LogLevel   zerolog.Level
 	stdoutPipe bool
 }
 
@@ -90,8 +92,8 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 		return data.String()
 	})
 
-	if Logger != nil {
-		Logger.Debug().Msgf("Executing `%s`\n", strings.Join(cmds, " | "))
+	if Logger != nil && p.option.LogLevel <= zerolog.DebugLevel {
+		Logger.Debug().Msgf("Executing `%s`", strings.Join(cmds, " | "))
 	}
 
 	var cancel context.CancelFunc
@@ -110,8 +112,8 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 
 	// prepare commands
 	for index, command := range p.cmds {
-		if Logger != nil {
-			Logger.Trace().Msgf("%d/%d preparing %s\n", index, total, command.String())
+		if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
+			Logger.Trace().Msgf("%d/%d preparing %s", index, total, command.String())
 		}
 
 		command.cmd = exec.CommandContext(ctx, command.command, command.args...)
@@ -154,8 +156,8 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 		// last command
 		if index == total-1 {
 			if p.option.stdoutPipe {
-				if Logger != nil {
-					Logger.Trace().Msgf("using cmd.StdoutPipe on '%s'\n", command.String())
+				if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
+					Logger.Trace().Msgf("using cmd.StdoutPipe on '%s'", command.String())
 				}
 				pipe, err := command.cmd.StdoutPipe()
 				if err != nil {
@@ -169,11 +171,13 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 				}
 				p.StdErrPipe = pipeErr
 
-			} else if command.StdOut != nil {
-				if Logger != nil {
-					Logger.Trace().Msgf("using cmd.StdOut on '%s'\n", command.String())
+			} else {
+				if command.StdOut != nil {
+					if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
+						Logger.Trace().Msgf("using cmd.StdOut on '%s'", command.String())
+					}
+					command.cmd.Stdout = command.StdOut
 				}
-				command.cmd.Stdout = command.StdOut
 			}
 		}
 	}
@@ -186,13 +190,17 @@ func (p *Processbuilder) output() (*bytes.Buffer, *bytes.Buffer, int, error) {
 	var outBuffer bytes.Buffer
 	var errBuffer bytes.Buffer
 
-	if total > 0 {
-		if p.cmds[total-1].StdOut != nil {
-			return nil, nil, -1, errors.New("stdout not allowed on the last command")
-		}
-		p.cmds[total-1].StdOut = &outBuffer
-		p.cmds[total-1].StdErr = &errBuffer
+	if total == 0 {
+		return nil, nil, -1, ErrNoCommands
 	}
+
+	lastCommand := p.cmds[total-1]
+
+	if lastCommand.StdOut == nil {
+		lastCommand.StdOut = &outBuffer
+	}
+
+	lastCommand.StdErr = &errBuffer
 
 	_, err := p.prepare()
 
@@ -204,11 +212,11 @@ func (p *Processbuilder) output() (*bytes.Buffer, *bytes.Buffer, int, error) {
 	defer p.close()
 
 	if err := Start(p); err != nil {
-		return nil, &errBuffer, 0, err
+		return &outBuffer, &errBuffer, 0, err
 	}
 
 	if _, _, err := Wait(p); err != nil {
-		return nil, &errBuffer, -1, err
+		return &outBuffer, &errBuffer, -1, err
 	}
 
 	return &outBuffer, &errBuffer, p.cmds[total-1].exitCode, nil
@@ -239,8 +247,8 @@ func Start(p *Processbuilder) error {
 	total := len(p.cmds)
 
 	for index, command := range p.cmds {
-		if Logger != nil {
-			Logger.Trace().Msgf("%d/%d calling start on command %s\n", index, total, command.String())
+		if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
+			Logger.Trace().Msgf("%d/%d calling start on command %s", index, total, command.String())
 		}
 		if err := command.cmd.Start(); err != nil {
 			return err
@@ -261,7 +269,7 @@ func Wait(p *Processbuilder) (int, *exec.Cmd, error) {
 	if p.option.Close != nil {
 		go func() {
 			<-*p.option.Close
-			if Logger != nil {
+			if Logger != nil && p.option.LogLevel <= zerolog.DebugLevel {
 				Logger.Debug().Msg("Received kill signal!")
 			}
 			Kill(p)
@@ -272,8 +280,8 @@ func Wait(p *Processbuilder) (int, *exec.Cmd, error) {
 	var lastCommand = p.cmds[total-1]
 
 	for index, command := range p.cmds {
-		if Logger != nil {
-			Logger.Trace().Msgf("%d/%d calling wait on command %s\n", index, total, command.String())
+		if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
+			Logger.Trace().Msgf("%d/%d calling wait on command %s", index, total, command.String())
 		}
 
 		if err := command.cmd.Wait(); err != nil {
@@ -295,8 +303,8 @@ func Wait(p *Processbuilder) (int, *exec.Cmd, error) {
 		}
 	}
 
-	if Logger != nil {
-		Logger.Trace().Msgf("exitCode=%d\n", lastCommand.exitCode)
+	if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
+		Logger.Trace().Msgf("exitCode=%d", lastCommand.exitCode)
 	}
 	return lastCommand.exitCode, lastCommand.cmd, nil
 }
