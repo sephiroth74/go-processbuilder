@@ -11,14 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rs/zerolog"
 	"gotest.tools/v3/assert"
 )
-
-func init() {
-	var logger = zerolog.New(os.Stdout)
-	SetLogger(&logger)
-}
 
 // test simple output pipe
 func TestSimpleOutput(t *testing.T) {

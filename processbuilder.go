@@ -18,12 +18,17 @@ import (
 )
 
 var (
-	Logger *zerolog.Logger = nil
-
-	ErrNoCommands         = errors.New("at least one command is required")
-	ErrProcAlreadyStarted = errors.New("process already started")
-	ErrProcNotStarted     = errors.New("process not started")
+	consoleWriter         zerolog.ConsoleWriter = zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC822Z}
+	Logger                *zerolog.Logger       = nil
+	ErrNoCommands         error                 = errors.New("at least one command is required")
+	ErrProcAlreadyStarted error                 = errors.New("process already started")
+	ErrProcNotStarted     error                 = errors.New("process not started")
 )
+
+func init() {
+	defaultLogger := zerolog.New(consoleWriter)
+	Logger = &defaultLogger
+}
 
 func SetLogger(logger *zerolog.Logger) {
 	Logger = logger
