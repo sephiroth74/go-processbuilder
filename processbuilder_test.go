@@ -55,10 +55,6 @@ func TestSimpleLogCat(t *testing.T) {
 // assume adb is already connected
 // test screen mirroring
 func TestScreenMirroring(t *testing.T) {
-	closeSignal := make(chan os.Signal)
-	signal.Notify(closeSignal, os.Interrupt, syscall.SIGTERM)
-	defer close(closeSignal)
-
 	p, err := Create(
 		Option{Timeout: 30 * time.Second},
 		NewCommand("adb", "shell", "while true; do screenrecord --output-format=h264 --size=1024x768 -; done"),
@@ -87,14 +83,11 @@ func TestScreenMirroring(t *testing.T) {
 
 func TestLogcatPipe(t *testing.T) {
 	log.Default().Println("TestLogcatPipe")
-	closeSignal := make(chan os.Signal)
-	signal.Notify(closeSignal, os.Interrupt, syscall.SIGTERM)
-	defer close(closeSignal)
 
 	p, err := PipeOutput(
 		Option{Timeout: 10 * time.Second},
 		NewCommand("adb", "logcat", "-v", "pid", "-T", "01-20 08:52:41.820", "tvlib.RestClient:V *:S"),
-		// NewCommand("grep", "RestClient"),
+		NewCommand("grep", "RestClient"),
 	)
 	assert.NilError(t, err)
 
@@ -109,6 +102,8 @@ func TestLogcatPipe(t *testing.T) {
 	for scanner.Scan() {
 		text := scanner.Text()
 		fmt.Printf("line => %s\n", text)
+		Cancel(p)
+		break
 	}
 
 	exit, _, err := Wait(p)
@@ -124,10 +119,6 @@ func TestLogcatPipe(t *testing.T) {
 }
 
 func TestSimpleLogcat(t *testing.T) {
-	closeSignal := make(chan os.Signal)
-	signal.Notify(closeSignal, os.Interrupt, syscall.SIGTERM)
-	defer close(closeSignal)
-
 	p, err := PipeOutput(
 		Option{},
 		NewCommand("adb", "logcat"),
@@ -168,10 +159,6 @@ func TestSimpleLogcat(t *testing.T) {
 }
 
 func TestScreenRecord(t *testing.T) {
-	closeSignal := make(chan os.Signal)
-	signal.Notify(closeSignal, os.Interrupt, syscall.SIGTERM)
-	defer close(closeSignal)
-
 	outBuf, outErr, code, _, err := Output(
 		Option{
 			Timeout: 10 * time.Second,
@@ -197,6 +184,4 @@ func TestScreenRecord(t *testing.T) {
 	} else {
 		fmt.Println("done.")
 	}
-
-	// shell screenrecord --bit-rate 20000000 --time-limit 180 /sdcard/Download/screenrecord.mp4
 }
