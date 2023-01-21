@@ -144,3 +144,38 @@ func TestSimpleLogcat(t *testing.T) {
 		assert.Equal(t, 0, exit)
 	}
 }
+
+func TestScreenRecord(t *testing.T) {
+	closeSignal := make(chan os.Signal)
+	signal.Notify(closeSignal, os.Interrupt, syscall.SIGTERM)
+	defer close(closeSignal)
+
+	outBuf, outErr, code, err := Output(
+		Option{
+			Timeout: 10 * time.Second,
+			Close:   &closeSignal,
+		},
+		NewCommand("adb", "shell", "screenrecord --bit-rate 20000000 --time-limit 5 /sdcard/Download/screenrecord.mp4"),
+	)
+
+	fmt.Printf("[test] exit code: %d\n", code)
+
+	if code != int(syscall.SIGINT) {
+		if err != nil {
+			fmt.Println(err.Error())
+			fmt.Printf("[test] err: %#v\n", err)
+		}
+
+		if outErr != nil {
+			fmt.Printf("[test] output: %s\n", outBuf.String())
+		}
+
+		if outErr != nil {
+			fmt.Printf("[test] out error: %s\n", outErr.String())
+		}
+	} else {
+		fmt.Println("done.")
+	}
+
+	// shell screenrecord --bit-rate 20000000 --time-limit 180 /sdcard/Download/screenrecord.mp4
+}

@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -65,6 +66,7 @@ type Processbuilder struct {
 
 	started    bool
 	exited     bool
+	killed     bool
 	cancelFn   context.CancelFunc
 	Ctx        context.Context
 	StdoutPipe io.ReadCloser
@@ -227,8 +229,8 @@ func (p *Processbuilder) output() (*bytes.Buffer, *bytes.Buffer, int, error) {
 		return &outBuffer, &errBuffer, 0, err
 	}
 
-	if _, _, err := Wait(p); err != nil {
-		return &outBuffer, &errBuffer, -1, err
+	if code, _, err := Wait(p); err != nil {
+		return &outBuffer, &errBuffer, code, err
 	}
 
 	return &outBuffer, &errBuffer, p.cmds[total-1].exitCode, nil
@@ -259,23 +261,24 @@ func Start(p *Processbuilder) error {
 	total := len(p.cmds)
 
 	for index, command := range p.cmds {
-		if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
+		if Logger != nil {
 			Logger.Trace().Msgf("%d/%d calling start on command %s", index, total, command.String())
 		}
+
 		if err := command.cmd.Start(); err != nil {
 			return err
 		}
 	}
 
-	if p.option.Close != nil {
-		go func() {
-			<-*p.option.Close
-			if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
-				Logger.Trace().Msg("Received kill signal during Start!")
-			}
-			Kill(p)
-		}()
-	}
+	// if p.option.Close != nil {
+	// 	go func() {
+	// 		<-*p.option.Close
+	// 		if Logger != nil {
+	// 			Logger.Trace().Msg("Received kill signal during Start!")
+	// 		}
+	// 		Kill(p)
+	// 	}()
+	// }
 
 	return nil
 }
@@ -284,7 +287,7 @@ func Wait(p *Processbuilder) (int, *exec.Cmd, error) {
 	total := len(p.cmds)
 
 	if !p.started || p.exited {
-		return 0, nil, ErrProcNotStarted
+		return -1, nil, ErrProcNotStarted
 	}
 
 	defer p.close()
@@ -308,7 +311,11 @@ func Wait(p *Processbuilder) (int, *exec.Cmd, error) {
 		}
 
 		if err := command.cmd.Wait(); err != nil {
-			return command.cmd.ProcessState.ExitCode(), nil, err
+			exitCode := command.cmd.ProcessState.ExitCode()
+			if p.killed {
+				return int(syscall.SIGINT), command.cmd, err
+			}
+			return exitCode, command.cmd, err
 		}
 
 		exitCode := command.cmd.ProcessState.ExitCode()
@@ -326,24 +333,22 @@ func Wait(p *Processbuilder) (int, *exec.Cmd, error) {
 		}
 	}
 
-	if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
-		Logger.Trace().Msgf("exitCode=%d", lastCommand.exitCode)
-	}
 	return lastCommand.exitCode, lastCommand.cmd, nil
 }
 
 func Kill(p *Processbuilder) error {
 	if Logger != nil && p.option.LogLevel <= zerolog.DebugLevel {
-		Logger.Debug().Msgf("Killing %s\n", p.String())
+		Logger.Debug().Msg("Killing process...")
 	}
 
 	if !p.started || p.exited {
 		return ErrProcNotStarted
 	}
+
 	if p.Count() > 0 {
 		err := p.cmds[0].cmd.Process.Kill()
+		p.killed = true
 		p.exited = true
-		println("err", err)
 		return err
 	}
 
@@ -352,7 +357,7 @@ func Kill(p *Processbuilder) error {
 
 func Cancel(p *Processbuilder) error {
 	if Logger != nil && p.option.LogLevel <= zerolog.DebugLevel {
-		Logger.Debug().Msgf("Cancelling %s\n", p.String())
+		Logger.Debug().Msgf("Cancelling process...")
 	}
 
 	if !p.started || p.exited {
