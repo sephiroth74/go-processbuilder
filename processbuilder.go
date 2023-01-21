@@ -27,7 +27,7 @@ var (
 )
 
 func init() {
-	defaultLogger := zerolog.New(consoleWriter)
+	defaultLogger := zerolog.New(consoleWriter).Level(zerolog.TraceLevel)
 	Logger = &defaultLogger
 }
 
@@ -297,6 +297,7 @@ func Wait(p *Processbuilder) (int, *exec.Cmd, error) {
 			<-*p.option.Close
 			if Logger != nil && p.option.LogLevel <= zerolog.DebugLevel {
 				Logger.Debug().Msg("Received kill signal during Wait!")
+				p.killed = true
 			}
 			Kill(p)
 		}()
