@@ -261,7 +261,7 @@ func Start(p *Processbuilder) error {
 	total := len(p.cmds)
 
 	for index, command := range p.cmds {
-		if Logger != nil {
+		if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
 			Logger.Trace().Msgf("%d/%d calling start on command %s", index, total, command.String())
 		}
 
