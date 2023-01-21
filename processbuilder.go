@@ -295,9 +295,9 @@ func Wait(p *Processbuilder) (int, *exec.Cmd, error) {
 	if p.option.Close != nil {
 		go func() {
 			<-*p.option.Close
+			p.killed = true
 			if Logger != nil && p.option.LogLevel <= zerolog.DebugLevel {
 				Logger.Debug().Msg("Received kill signal during Wait!")
-				p.killed = true
 			}
 			Kill(p)
 		}()
