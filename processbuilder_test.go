@@ -69,7 +69,7 @@ func TestLogcatPipe(t *testing.T) {
 	signal.Notify(closeSignal, os.Interrupt, syscall.SIGTERM)
 	defer close(closeSignal)
 
-	p, err := Pipe(
+	p, err := PipeOutput(
 		Option{Close: &closeSignal, Timeout: 10 * time.Second},
 		NewCommand("adb", "logcat", "-v", "pid", "-T", "01-20 08:52:41.820", "tvlib.RestClient:V *:S"),
 		// NewCommand("grep", "RestClient"),
@@ -106,7 +106,7 @@ func TestSimpleLogcat(t *testing.T) {
 	signal.Notify(closeSignal, os.Interrupt, syscall.SIGTERM)
 	defer close(closeSignal)
 
-	p, err := Pipe(
+	p, err := PipeOutput(
 		Option{Close: &closeSignal},
 		NewCommand("adb", "logcat"),
 	)

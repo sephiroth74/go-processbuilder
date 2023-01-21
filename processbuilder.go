@@ -234,7 +234,7 @@ func (p *Processbuilder) output() (*bytes.Buffer, *bytes.Buffer, int, error) {
 	return &outBuffer, &errBuffer, p.cmds[total-1].exitCode, nil
 }
 
-func Pipe(option Option, cmd ...*Command) (*Processbuilder, error) {
+func PipeOutput(option Option, cmd ...*Command) (*Processbuilder, error) {
 	option.stdoutPipe = true
 	p := &Processbuilder{cmds: cmd, option: &option}
 	return p.prepare()
