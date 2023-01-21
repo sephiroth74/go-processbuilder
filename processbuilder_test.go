@@ -16,7 +16,7 @@ import (
 
 // test simple output pipe
 func TestSimpleOutput(t *testing.T) {
-	outBuf, _, code, err := Output(
+	outBuf, _, code, _, err := Output(
 		EmptyOption(),
 		NewCommand("ls", "-la"),
 		NewCommand("grep", "process"),
@@ -30,6 +30,28 @@ func TestSimpleOutput(t *testing.T) {
 	fmt.Println(outBuf)
 }
 
+func TestSimpleLogCat(t *testing.T) {
+	outBuffer, errBuffer, code, status, err := Output(
+		Option{Timeout: 5 * time.Second},
+		NewCommand("adb", "logcat", "-v", "brief", "-T", "01-21 13:52:12.664", "WM-DiagnosticsWrkr:V", "*:S"),
+	)
+
+	if err != nil {
+		fmt.Printf("err: %#v\n", err)
+	}
+
+	fmt.Printf("code: %d\n", code)
+	fmt.Printf("status: %#v\n", status)
+
+	if outBuffer != nil {
+		fmt.Printf("outBuffer: %s\n", outBuffer.String())
+	}
+
+	if errBuffer != nil {
+		fmt.Printf("errBuffer: %s\n", errBuffer.String())
+	}
+}
+
 // assume adb is already connected
 // test screen mirroring
 func TestScreenMirroring(t *testing.T) {
@@ -38,7 +60,7 @@ func TestScreenMirroring(t *testing.T) {
 	defer close(closeSignal)
 
 	p, err := Create(
-		Option{Timeout: 30 * time.Second, Close: &closeSignal},
+		Option{Timeout: 30 * time.Second},
 		NewCommand("adb", "shell", "while true; do screenrecord --output-format=h264 --size=1024x768 -; done"),
 		NewCommand("ffplay", "-framerate", "60", "-probesize", "64", "-sync", "video", "-").
 			WithStdErr(os.Stderr).
@@ -70,7 +92,7 @@ func TestLogcatPipe(t *testing.T) {
 	defer close(closeSignal)
 
 	p, err := PipeOutput(
-		Option{Close: &closeSignal, Timeout: 10 * time.Second},
+		Option{Timeout: 10 * time.Second},
 		NewCommand("adb", "logcat", "-v", "pid", "-T", "01-20 08:52:41.820", "tvlib.RestClient:V *:S"),
 		// NewCommand("grep", "RestClient"),
 	)
@@ -107,7 +129,7 @@ func TestSimpleLogcat(t *testing.T) {
 	defer close(closeSignal)
 
 	p, err := PipeOutput(
-		Option{Close: &closeSignal},
+		Option{},
 		NewCommand("adb", "logcat"),
 	)
 	assert.NilError(t, err)
@@ -150,10 +172,9 @@ func TestScreenRecord(t *testing.T) {
 	signal.Notify(closeSignal, os.Interrupt, syscall.SIGTERM)
 	defer close(closeSignal)
 
-	outBuf, outErr, code, err := Output(
+	outBuf, outErr, code, _, err := Output(
 		Option{
 			Timeout: 10 * time.Second,
-			Close:   &closeSignal,
 		},
 		NewCommand("adb", "shell", "screenrecord --bit-rate 20000000 --time-limit 5 /sdcard/Download/screenrecord.mp4"),
 	)
