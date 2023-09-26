@@ -371,12 +371,12 @@ func Wait(p *Processbuilder) (int, *os.ProcessState, error) {
 	var lastCommand = p.cmds[total-1]
 
 	for index, command := range p.cmds {
-		if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+		if Logger != nil && p.option.LogLevel < log.DebugLevel {
 			Logger.Debugf("%d/%d calling wait on command %s", index, total, command.String())
 		}
 
 		if err := command.cmd.Wait(); err != nil {
-			if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+			if Logger != nil && p.option.LogLevel < log.DebugLevel {
 				Logger.Debugf("%d/%d wait exited with error %s", index, total, err.Error())
 			}
 			exitCode := getExitCode(command.cmd, err)
