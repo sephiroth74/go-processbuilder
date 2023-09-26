@@ -147,7 +147,8 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 
 	// prepare commands
 	for index, command := range p.cmds {
-		if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+		
+		if Logger != nil && p.option.LogLevel < log.DebugLevel {
 			Logger.Debugf("%d/%d preparing %s", index, total, command.String())
 		}
 
@@ -191,7 +192,7 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 		// last command
 		if index == total-1 {
 			if p.option.stdoutPipe {
-				if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+				if Logger != nil && p.option.LogLevel < log.DebugLevel {
 					Logger.Debugf("using cmd.StdoutPipe on '%s'", command.String())
 				}
 				pipe, err := command.cmd.StdoutPipe()
@@ -208,7 +209,7 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 
 			} else {
 				if command.StdOut != nil {
-					if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+					if Logger != nil && p.option.LogLevel < log.DebugLevel {
 						Logger.Debugf("using cmd.StdOut on '%s'", command.String())
 					}
 					command.cmd.Stdout = command.StdOut
@@ -283,7 +284,7 @@ func Start(p *Processbuilder) error {
 	total := len(p.cmds)
 
 	for index, command := range p.cmds {
-		if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+		if Logger != nil && p.option.LogLevel < log.DebugLevel {
 			Logger.Debugf("%d/%d calling start on command %s", index, total, command.String())
 		}
 
@@ -317,12 +318,12 @@ func Run(p *Processbuilder) (int, *os.ProcessState, error) {
 	var lastCommand = p.cmds[total-1]
 
 	for index, command := range p.cmds {
-		if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+		if Logger != nil && p.option.LogLevel < log.DebugLevel {
 			Logger.Debugf("%d/%d calling run on command %s", index, total, command.String())
 		}
 
 		if err := command.cmd.Run(); err != nil {
-			if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+			if Logger != nil && p.option.LogLevel < log.DebugLevel {
 				Logger.Debugf("%d/%d run exited with error %s", index, total, err.Error())
 			}
 
