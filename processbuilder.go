@@ -14,17 +14,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rs/zerolog"
+	"github.com/charmbracelet/log"
 
 	streams "github.com/sephiroth74/go_streams"
 )
 
 var (
-	consoleWriter         zerolog.ConsoleWriter = zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC822Z}
-	Logger                *zerolog.Logger       = nil
-	ErrNoCommands         error                 = errors.New("at least one command is required")
-	ErrProcAlreadyStarted error                 = errors.New("process already started")
-	ErrProcNotStarted     error                 = errors.New("process not started")
+	Logger                *log.Logger = nil
+	ErrNoCommands         error       = errors.New("at least one command is required")
+	ErrProcAlreadyStarted error       = errors.New("process already started")
+	ErrProcNotStarted     error       = errors.New("process not started")
 )
 
 type ExitStatus string
@@ -37,8 +36,8 @@ const (
 )
 
 func init() {
-	defaultLogger := zerolog.New(consoleWriter).Level(zerolog.TraceLevel)
-	Logger = &defaultLogger
+	defaultLogger := log.New(os.Stderr)
+	Logger = defaultLogger
 }
 
 func getExitCode(cmd *exec.Cmd, err error) int {
@@ -55,7 +54,7 @@ func getExitCode(cmd *exec.Cmd, err error) int {
 	return code
 }
 
-func SetLogger(logger *zerolog.Logger) {
+func SetLogger(logger *log.Logger) {
 	Logger = logger
 }
 
@@ -75,7 +74,7 @@ type Command struct {
 
 type Option struct {
 	Timeout    time.Duration
-	LogLevel   zerolog.Level
+	LogLevel   log.Level
 	stdoutPipe bool
 }
 
@@ -129,8 +128,8 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 		return data.String()
 	})
 
-	if Logger != nil && p.option.LogLevel <= zerolog.DebugLevel {
-		Logger.Debug().Msgf("Executing `%s`", strings.Join(cmds, " | "))
+	if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+		Logger.Debugf("Executing `%s`", strings.Join(cmds, " | "))
 	}
 
 	var cancel context.CancelFunc
@@ -148,12 +147,11 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 
 	// prepare commands
 	for index, command := range p.cmds {
-		if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
-			Logger.Trace().Msgf("%d/%d preparing %s", index, total, command.String())
+		if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+			Logger.Debugf("%d/%d preparing %s", index, total, command.String())
 		}
 
 		command.cmd = exec.CommandContext(ctx, command.command, command.args...)
-		// command.cmd = exec.Command(command.command, command.args...)
 
 		// checks
 
@@ -193,8 +191,8 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 		// last command
 		if index == total-1 {
 			if p.option.stdoutPipe {
-				if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
-					Logger.Trace().Msgf("using cmd.StdoutPipe on '%s'", command.String())
+				if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+					Logger.Debugf("using cmd.StdoutPipe on '%s'", command.String())
 				}
 				pipe, err := command.cmd.StdoutPipe()
 				if err != nil {
@@ -210,8 +208,8 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 
 			} else {
 				if command.StdOut != nil {
-					if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
-						Logger.Trace().Msgf("using cmd.StdOut on '%s'", command.String())
+					if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+						Logger.Debugf("using cmd.StdOut on '%s'", command.String())
 					}
 					command.cmd.Stdout = command.StdOut
 				}
@@ -285,8 +283,8 @@ func Start(p *Processbuilder) error {
 	total := len(p.cmds)
 
 	for index, command := range p.cmds {
-		if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
-			Logger.Trace().Msgf("%d/%d calling start on command %s", index, total, command.String())
+		if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+			Logger.Debugf("%d/%d calling start on command %s", index, total, command.String())
 		}
 
 		if err := command.cmd.Start(); err != nil {
@@ -319,13 +317,13 @@ func Run(p *Processbuilder) (int, *os.ProcessState, error) {
 	var lastCommand = p.cmds[total-1]
 
 	for index, command := range p.cmds {
-		if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
-			Logger.Trace().Msgf("%d/%d calling run on command %s", index, total, command.String())
+		if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+			Logger.Debugf("%d/%d calling run on command %s", index, total, command.String())
 		}
 
 		if err := command.cmd.Run(); err != nil {
-			if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
-				Logger.Trace().Msgf("%d/%d run exited with error %s", index, total, err.Error())
+			if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+				Logger.Debugf("%d/%d run exited with error %s", index, total, err.Error())
 			}
 
 			exitCode := getExitCode(command.cmd, err)
@@ -373,13 +371,13 @@ func Wait(p *Processbuilder) (int, *os.ProcessState, error) {
 	var lastCommand = p.cmds[total-1]
 
 	for index, command := range p.cmds {
-		if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
-			Logger.Trace().Msgf("%d/%d calling wait on command %s", index, total, command.String())
+		if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+			Logger.Debugf("%d/%d calling wait on command %s", index, total, command.String())
 		}
 
 		if err := command.cmd.Wait(); err != nil {
-			if Logger != nil && p.option.LogLevel <= zerolog.TraceLevel {
-				Logger.Trace().Msgf("%d/%d wait exited with error %s", index, total, err.Error())
+			if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+				Logger.Debugf("%d/%d wait exited with error %s", index, total, err.Error())
 			}
 			exitCode := getExitCode(command.cmd, err)
 			if p.killed {
@@ -407,8 +405,8 @@ func Wait(p *Processbuilder) (int, *os.ProcessState, error) {
 }
 
 func Kill(p *Processbuilder) error {
-	if Logger != nil && p.option.LogLevel <= zerolog.DebugLevel {
-		Logger.Debug().Msg("Killing process...")
+	if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+		Logger.Debugf("Killing process...")
 	}
 
 	p.killed = true
@@ -428,8 +426,8 @@ func Kill(p *Processbuilder) error {
 }
 
 func Cancel(p *Processbuilder) error {
-	if Logger != nil && p.option.LogLevel <= zerolog.DebugLevel {
-		Logger.Debug().Msgf("Cancelling process...")
+	if Logger != nil && p.option.LogLevel <= log.DebugLevel {
+		Logger.Debugf("Cancelling process...")
 	}
 
 	p.killed = true
