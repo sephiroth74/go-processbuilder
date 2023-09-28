@@ -24,3 +24,5 @@ require (
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/sephiroth74/go_streams v1.0.8
 )
+
+replace github.com/charmbracelet/log => github.com/sephiroth74/log v0.0.0-20230928164420-1af6a43c36c4

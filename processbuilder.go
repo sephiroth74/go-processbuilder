@@ -149,7 +149,7 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 	for index, command := range p.cmds {
 		
 		if Logger != nil && p.option.LogLevel < log.DebugLevel {
-			Logger.Debugf("%d/%d preparing %s", index, total, command.String())
+			Logger.Tracef("%d/%d preparing %s", index, total, command.String())
 		}
 
 		command.cmd = exec.CommandContext(ctx, command.command, command.args...)
@@ -193,7 +193,7 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 		if index == total-1 {
 			if p.option.stdoutPipe {
 				if Logger != nil && p.option.LogLevel < log.DebugLevel {
-					Logger.Debugf("using cmd.StdoutPipe on '%s'", command.String())
+					Logger.Tracef("using cmd.StdoutPipe on '%s'", command.String())
 				}
 				pipe, err := command.cmd.StdoutPipe()
 				if err != nil {
@@ -210,7 +210,7 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 			} else {
 				if command.StdOut != nil {
 					if Logger != nil && p.option.LogLevel < log.DebugLevel {
-						Logger.Debugf("using cmd.StdOut on '%s'", command.String())
+						Logger.Tracef("using cmd.StdOut on '%s'", command.String())
 					}
 					command.cmd.Stdout = command.StdOut
 				}
@@ -285,7 +285,7 @@ func Start(p *Processbuilder) error {
 
 	for index, command := range p.cmds {
 		if Logger != nil && p.option.LogLevel < log.DebugLevel {
-			Logger.Debugf("%d/%d calling start on command %s", index, total, command.String())
+			Logger.Tracef("%d/%d calling start on command %s", index, total, command.String())
 		}
 
 		if err := command.cmd.Start(); err != nil {
@@ -319,12 +319,12 @@ func Run(p *Processbuilder) (int, *os.ProcessState, error) {
 
 	for index, command := range p.cmds {
 		if Logger != nil && p.option.LogLevel < log.DebugLevel {
-			Logger.Debugf("%d/%d calling run on command %s", index, total, command.String())
+			Logger.Tracef("%d/%d calling run on command %s", index, total, command.String())
 		}
 
 		if err := command.cmd.Run(); err != nil {
 			if Logger != nil && p.option.LogLevel < log.DebugLevel {
-				Logger.Debugf("%d/%d run exited with error %s", index, total, err.Error())
+				Logger.Tracef("%d/%d run exited with error %s", index, total, err.Error())
 			}
 
 			exitCode := getExitCode(command.cmd, err)
@@ -373,12 +373,12 @@ func Wait(p *Processbuilder) (int, *os.ProcessState, error) {
 
 	for index, command := range p.cmds {
 		if Logger != nil && p.option.LogLevel < log.DebugLevel {
-			Logger.Debugf("%d/%d calling wait on command %s", index, total, command.String())
+			Logger.Tracef("%d/%d calling wait on command %s", index, total, command.String())
 		}
 
 		if err := command.cmd.Wait(); err != nil {
 			if Logger != nil && p.option.LogLevel < log.DebugLevel {
-				Logger.Debugf("%d/%d wait exited with error %s", index, total, err.Error())
+				Logger.Tracef("%d/%d wait exited with error %s", index, total, err.Error())
 			}
 			exitCode := getExitCode(command.cmd, err)
 			if p.killed {
@@ -434,7 +434,9 @@ func Cancel(p *Processbuilder) error {
 	p.killed = true
 
 	if !p.started || p.exited {
-		println("already cancelled!")
+		if Logger != nil && p.option.LogLevel <= log.TraceLevel {
+			Logger.Trace("already cancelled!")
+		}
 		return ErrProcNotStarted
 	}
 
