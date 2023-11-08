@@ -147,7 +147,7 @@ func (p *Processbuilder) prepare() (*Processbuilder, error) {
 
 	// prepare commands
 	for index, command := range p.cmds {
-		
+
 		if Logger != nil && p.option.LogLevel < log.DebugLevel {
 			Logger.Tracef("%d/%d preparing %s", index, total, command.String())
 		}
@@ -312,7 +312,15 @@ func Run(p *Processbuilder) (int, *os.ProcessState, error) {
 	closeChannel := make(chan os.Signal, 1)
 	signal.Notify(closeChannel, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(closeChannel)
-	defer close(closeChannel)
+	// defer close(closeChannel)
+	defer func() {
+		Logger.Trace("[Run] Closing channel...")
+		if !IsClosed(closeChannel) {
+			close(closeChannel)
+		} else {
+			Logger.Trace("closeChannel already closed!")
+		}
+	}()
 
 	var previousCommand *Command
 	var lastCommand = p.cmds[total-1]
@@ -366,7 +374,16 @@ func Wait(p *Processbuilder) (int, *os.ProcessState, error) {
 	closeChannel := make(chan os.Signal, 1)
 	signal.Notify(closeChannel, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(closeChannel)
-	defer close(closeChannel)
+
+	defer func() {
+		Logger.Trace("[Wait] Closing channel...")
+		if !IsClosed(closeChannel) {
+			close(closeChannel)
+		} else {
+			Logger.Trace("closeChannel already closed!")
+		}
+	}()
+	// defer close(closeChannel)
 
 	var previousCommand *Command
 	var lastCommand = p.cmds[total-1]
@@ -479,4 +496,14 @@ func (c *Command) close() {
 
 func (c *Command) String() string {
 	return fmt.Sprintf("%s %s", filepath.Base(c.command), strings.Join(c.args, " "))
+}
+
+func IsClosed(ch <-chan os.Signal) bool {
+	select {
+	case <-ch:
+		return true
+	default:
+	}
+
+	return false
 }
